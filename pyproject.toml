@@ -1,0 +1,23 @@
+# pyproject.toml
+[project]
+name = "embedcompare"
+version = "0.1.0"
+description = "Playground for sentence embeddings, similarity, and keywords"
+requires-python = ">=3.9"
+dependencies = [
+  "streamlit>=1.36",
+  "sentence-transformers>=3.0",
+  "keybert>=0.8",
+  "scikit-learn>=1.4",
+  "numpy>=1.26",
+  # optional extras you might add later:
+  # "umap-learn>=0.5",
+  # "torch>=2.2; platform_system!='Darwin' or platform_machine!='arm64'"
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py39"]
+
+[tool.ruff]
+line-length = 100
