@@ -10,6 +10,7 @@ dependencies = [
   "keybert>=0.8",
   "scikit-learn>=1.4",
   "numpy>=1.26",
+  "matplotlib>=3.9"
   # optional extras you might add later:
   # "umap-learn>=0.5",
   # "torch>=2.2; platform_system!='Darwin' or platform_machine!='arm64'"
