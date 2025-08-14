@@ -37,9 +37,17 @@ run:
 
 # Ensure pre-commit + tools are available in the project env
 .PHONY: hook-install
-hook-install:
+hook-install: hook-ai
 	uv run pip install pre-commit black ruff
 	uv run pre-commit install
+
+# Enable prepare-commit-msg hook
+.PHONY: hook-ai
+hook-ai:
+	mkdir -p .git/hooks
+	cp tools/hooks/prepare-commit-msg .git/hooks/prepare-commit-msg
+	chmod +x .git/hooks/prepare-commit-msg
+	@echo "✅ AI commit hook installed."
 
 # Run all hooks on the whole repo (useful in CI or before big commits)
 .PHONY: fmt
