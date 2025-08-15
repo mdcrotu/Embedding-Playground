@@ -1,7 +1,7 @@
 repos:
   # Basic hygiene
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v6.0.0
     hooks:
       - id: check-merge-conflict
       - id: end-of-file-fixer
@@ -9,14 +9,24 @@ repos:
 
   # Black formatter (official)
   - repo: https://github.com/psf/black
-    rev: 24.8.0
+    rev: 25.1.0
     hooks:
       - id: black
         args: [--line-length=100]
 
   # Ruff linter/formatter (official pre-commit integration)
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.0
+    rev: v0.12.9
     hooks:
       - id: ruff
         args: [--fix, --line-length=100]
+
+  # Local AI commit message generator (commit-msg stage)
+  - repo: local
+    hooks:
+      - id: ai-commit-msg
+        name: AI Conventional Commit (Ollama)
+        entry: bash tools/hooks/ai_commit_msg.sh
+        language: system
+        stages: [commit-msg]
+        pass_filenames: true   # pre-commit passes COMMIT_MSG_FILE as $1
