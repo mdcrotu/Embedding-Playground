@@ -388,6 +388,8 @@ if [ "$AI_TRAILER" = "1" ]; then
     anthropic) MODEL_USED="${ANTHROPIC_MODEL}";;
     *)         MODEL_USED="${OLLAMA_MODEL}";;
   esac
+  # print backend/model to terminal before writing commit message
+  echo "[ai-commit] Using backend=$AI_BACKEND model=$MODEL_USED"
   MSG_FINAL="$(printf "%s\n\nAI-Commit: %s %s\n" "$MSG_FINAL" "$AI_BACKEND" "$MODEL_USED")"
 fi
 
