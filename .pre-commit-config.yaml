@@ -25,8 +25,66 @@ repos:
   - repo: local
     hooks:
       - id: ai-commit-msg
-        name: AI Conventional Commit (Ollama)
+        name: AI Commit Message
         entry: bash tools/hooks/ai_commit_msg.sh
         language: system
         stages: [commit-msg]
-        pass_filenames: true   # pre-commit passes COMMIT_MSG_FILE as $1
+        pass_filenames: true
+#        always_run: true
+
+
+  # - repo: local
+  #   hooks:
+  #     # --- AI commit hook: Ollama ---
+  #     # - id: ai-commit-msg-ollama
+  #     #   name: AI Commit Message (Ollama)
+  #     #   entry: bash tools/hooks/ai_commit_msg.sh
+  #     #   language: system
+  #     #   stages: [commit-msg]
+  #     #   pass_filenames: true
+  #     #   always_run: true
+  #     #   env:
+  #     #     AI_BACKEND: ollama
+  #     #     OLLAMA_URL: http://localhost:11434/api/chat
+  #     #     OLLAMA_MODEL: llama3:8b
+  #     #     MAX_DIFF_LINES: "600"
+  #     #     CTX_TOKENS: "4096"
+  #     #     TEMP: "0.3"
+  #     #     CURL_TIMEOUT: "60"
+
+  #     # --- AI commit hook: OpenAI ---
+  #     - id: ai-commit-msg-openai
+  #       name: AI Commit Message (OpenAI)
+  #       entry: bash tools/hooks/ai_commit_msg.sh
+  #       language: system
+  #       stages: [commit-msg]
+  #       pass_filenames: true
+  #       always_run: true
+  #       env:
+  #         AI_BACKEND: openai
+  #         OPENAI_API_KEY: ${OPENAI_API_KEY}
+  #         OPENAI_URL: https://api.openai.com/v1/chat/completions
+  #         OPENAI_MODEL: gpt-4o-mini
+  #         MAX_DIFF_LINES: "600"
+  #         CTX_TOKENS: "4096"
+  #         TEMP: "0.3"
+  #         CURL_TIMEOUT: "60"
+
+  # - repo: local
+  #   hooks:
+  #     - id: ai-commit-msg
+  #       name: AI Conventional Commit
+  #       entry: bash tools/hooks/ai_commit_msg.sh
+  #       language: system
+  #       stages: [commit-msg]
+  #       pass_filenames: true
+  #       --- Or Anthropic by default ---
+  #       env:
+  #         AI_PROVIDER: anthropic
+  #         ANTHROPIC_MODEL: claude-sonnet-4-20250514
+  #         ANTHROPIC_URL: https://api.anthropic.com/v1/messages
+  #         MAX_MODEL_TOKENS: "512"
+  #         CTX_TOKENS: "4096"
+  #         TEMP: "0.3"
+  #         CURL_TIMEOUT: "60"
+  #         # Set ANTHROPIC_API_KEY in your shell/CI
