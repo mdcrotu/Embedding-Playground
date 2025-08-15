@@ -238,6 +238,7 @@ BODY="$(cat "$BODY_JSON" 2>/dev/null || true)"
 # ------------- Extract response text -------------
 extract_msg_openai() {
   if (( have_jq )); then
+    # Prefer .output_text if present (Responses API)
     jq -r '(.output_text // empty)' 2>/dev/null
   else
     python3 - <<'PY'
@@ -250,6 +251,7 @@ except Exception:
 PY
   fi
 }
+
 extract_msg_anthropic() {
   if (( have_jq )); then
     jq -r '.content[0].text // empty' 2>/dev/null
@@ -288,15 +290,20 @@ sanitize_commit() {
     {
       g=$0
       sub(/\r$/, "", g)
+      # skip boilerplate-like lines
       if (!got) {
         if (g ~ /^[[:space:]]*(Here is|This message|Note:)/) next
         if (g ~ /^[[:space:]]*$/) next
+        # strip surrounding quotes
         sub(/^"[[:space:]]*/, "", g); sub(/[[:space:]]*"$/, "", g)
+        # if looks like conventional summary, keep it
         if (g ~ /^(feat|fix|refactor|docs|test|chore|perf|build|ci|style)(\([^)]+\))?:[[:space:]].+/) {
           print g; got=1; next
         }
+        # otherwise coerce into chore summary
         print "chore: " g; got=1; next
       } else {
+        # keep only bullet lines; allow a single blank line separating summary and bullets
         if (g ~ /^[[:space:]]*$/) { if (!printed_blank) { print ""; printed_blank=1 } ; next }
         if (g ~ /^[[:space:]]*[-*][[:space:]]+/) print g
       }
@@ -312,6 +319,7 @@ fi
 # ------------- Type remap + scope inference (enhanced) -------------
 CHANGED_FILES=$(git diff --cached --name-only | tr -d '\r' || true)
 
+# Quick counts / flags
 TOP_DIR=$(printf "%s\n" "$CHANGED_FILES" | awk -F/ 'NF>1{print $1} NF==1{print "."}' | sort | uniq -c | sort -rn | awk 'NR==1{print $2}')
 [ -z "$TOP_DIR" ] && TOP_DIR="."
 
@@ -325,13 +333,16 @@ has_buildfiles=$(printf "%s\n" "$CHANGED_FILES" | grep -E -q '(^|/)(Makefile|pyp
 has_ruff_black_cfg=$(printf "%s\n" "$CHANGED_FILES" | grep -E -q '(^|/)(\.ruff\.toml|ruff\.toml|pyproject\.toml|\.pre-commit-config\.ya?ml)$' && echo 1 || echo 0)
 has_benchmarks=$(printf "%s\n" "$CHANGED_FILES" | grep -Eq '(^|/)(benchmarks?|perf)/' && echo 1 || echo 0)
 
+# Split sanitized message
 summary=$(printf "%s\n" "$MSG_STRICT" | sed -n '1p')
 rest=$(printf "%s\n" "$MSG_STRICT" | sed '1d')
 
+# Ensure a type prefix exists
 if ! printf "%s" "$summary" | grep -Eq '^(feat|fix|refactor|docs|test|chore|perf|build|ci|style)(\([^)]+\))?: '; then
   summary="chore: $summary"
 fi
 
+# Heuristic remap priority (topmost wins)
 if [ "$only_md" = 1 ]; then
   summary=$(printf "%s" "$summary" | sed -E 's/^[a-z]+(\(|:)/docs\1/')
 elif [ "$only_tests" = 1 ]; then
@@ -341,18 +352,22 @@ elif [ "$has_ci" = 1 ]; then
 elif [ "$has_docker" = 1 ] || [ "$has_make" = 1 ] || [ "$has_buildfiles" = 1 ] || [ "$has_terraform" = 1 ]; then
   summary=$(printf "%s" "$summary" | sed -E 's/^[a-z]+(\(|:)/build\1/')
 elif [ "$has_ruff_black_cfg" = 1 ]; then
+  # treat formatter/linter config tweaks as style (or swap to chore if you prefer)
   summary=$(printf "%s" "$summary" | sed -E 's/^[a-z]+(\(|:)/style\1/')
 elif [ "$has_benchmarks" = 1 ]; then
   summary=$(printf "%s" "$summary" | sed -E 's/^[a-z]+(\(|:)/perf\1/')
 fi
 
+# Add a scope if missing and a meaningful top dir exists
 if ! printf "%s" "$summary" | grep -Eq '^[a-z]+\([^)]+\): '; then
   scope="$TOP_DIR"
+  # avoid silly scope for single-file root edits
   if [ "$scope" != "." ]; then
     summary=$(printf "%s" "$summary" | sed -E "s/^([a-z]+): /\1(${scope}): /")
   fi
 fi
 
+# Reassemble with bullets (if any survived sanitization)
 if [ -n "$(printf "%s" "$rest" | tr -d '[:space:]')" ]; then
   MSG_FINAL=$(printf "%s\n\n%s\n" "$summary" "$rest")
 else
@@ -362,9 +377,12 @@ fi
 # ---- Accept on message (body-first); log on failure ----
 if [ -n "$(printf "%s" "$MSG_FINAL" | tr -d '[:space:]')" ]; then
   printf "%s" "$MSG_FINAL" > "$COMMIT_MSG_FILE"
+  # Optional breadcrumb:
+  # echo "[ai-commit] accepted message; HTTP=$HTTP_CODE" >> "$LOG"
   exit 0
 fi
 
+# Failure path: log details and write a placeholder
 {
   echo "---- $(date) ----"
   echo "HTTP: $HTTP_CODE"
