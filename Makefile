@@ -53,7 +53,7 @@ hooks-update:
 
 hooks-uninstall:
 	uvx pre-commit uninstall || true
-	uvx pre-commit uninstall -t commit-msg || true
+	uvx pre-commit uninstall -t prepare-commit-msg || true
 
 # Run all hooks on the whole repo (useful locally & in CI)
 pre-commit fmt:
@@ -101,7 +101,7 @@ hooks-update:
 
 hooks-uninstall:
 	./dev.sh uv run pre-commit uninstall || true
-	./dev.sh uv run pre-commit uninstall -t commit-msg || true
+	./dev.sh uv run pre-commit uninstall -t prepare-commit-msg || true
 
 pre-commit fmt:
 	./dev.sh uv run pre-commit run --all-files
@@ -153,7 +153,7 @@ hooks-update:
 
 hooks-uninstall:
 	$(VENV)/bin/pre-commit uninstall || true
-	$(VENV)/bin/pre-commit uninstall -t commit-msg || true
+	$(VENV)/bin/pre-commit uninstall -t prepare-commit-msg || true
 
 # Show current backend settings
 hook-show:
@@ -203,21 +203,21 @@ endif
 hook-ollama: .ensure-precommit
 	@printf "AI_BACKEND=ollama\nOLLAMA_MODEL=%s\n" "llama3:8b" > .env.ai
 	@echo "Set backend to Ollama (llama3:8b) in .env.ai"
-	@$(PRECOMMIT_CMD) install --hook-type commit-msg --install-hooks
+	@$(PRECOMMIT_CMD) install --hook-type prepare-commit-msg --install-hooks
 
 # Set backend to OpenAI (cloud)
 hook-openai: .ensure-precommit
 	@if [ -z "$$OPENAI_API_KEY" ]; then echo "OPENAI_API_KEY not set in env"; exit 1; fi
 	@printf "AI_BACKEND=openai\nOPENAI_MODEL=%s\n" "gpt-4o-mini" > .env.ai
 	@echo "Set backend to OpenAI (gpt-4o-mini) in .env.ai"
-	@$(PRECOMMIT_CMD) install --hook-type commit-msg --install-hooks
+	@$(PRECOMMIT_CMD) install --hook-type prepare-commit-msg --install-hooks
 
 # Set backend to Anthropic (cloud)
 hook-anthropic: .ensure-precommit
 	@if [ -z "$$ANTHROPIC_API_KEY" ]; then echo "ANTHROPIC_API_KEY not set in env"; exit 1; fi
 	@printf "AI_BACKEND=anthropic\nANTHROPIC_MODEL=%s\n" "claude-sonnet-4-20250514" > .env.ai
 	@echo "Set backend to Anthropic (claude-sonnet-4-20250514) in .env.ai"
-	@$(PRECOMMIT_CMD) install --hook-type commit-msg --install-hooks
+	@$(PRECOMMIT_CMD) install --hook-type prepare-commit-msg --install-hooks
 
 # Show current backend settings
 hook-show:
@@ -244,7 +244,7 @@ help:
 	@echo "  make hook-openai   - Use OpenAI (requires OPENAI_API_KEY)"
 	@echo "  make hook-anthropic- Use Anthropic (requires ANTHROPIC_API_KEY)"
 	@echo "  make hook-show     - Show current AI backend settings"
-	@echo "  make hooks         - Install pre-commit hooks (incl. commit-msg)"
+	@echo "  make hooks         - Install pre-commit hooks (incl. prepare-commit-msg)"
 	@echo "  ----------------"
 	@echo "  make fmt           - Run all pre-commit hooks on all files"
 	@echo "  make format        - One-off Black + Ruff format (optional)"

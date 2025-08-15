@@ -28,5 +28,5 @@ repos:
         name: AI Commit Message
         entry: bash tools/hooks/ai_commit_msg.sh
         language: system
-        stages: [commit-msg]
+        stages: [prepare-commit-msg]
         pass_filenames: true
