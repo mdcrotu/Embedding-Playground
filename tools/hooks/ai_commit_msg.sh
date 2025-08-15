@@ -393,10 +393,39 @@ if [ "$AI_TRAILER" = "1" ]; then
   MSG_FINAL="$(printf "%s\n\nAI-Commit: %s %s\n" "$MSG_FINAL" "$AI_BACKEND" "$MODEL_USED")"
 fi
 
+# # ---- Accept on message (body-first); log on failure ----
+# if [ -n "$(printf "%s" "$MSG_FINAL" | tr -d '[:space:]')" ]; then
+#   printf "%s" "$MSG_FINAL" > "$COMMIT_MSG_FILE"
+#   # Optional breadcrumb:
+#   echo "[ai-commit] backend=$AI_BACKEND model=$MODEL_USED http=$HTTP_CODE" >> "$LOG"
+#   exit 0
+# fi
+
 # ---- Accept on message (body-first); log on failure ----
 if [ -n "$(printf "%s" "$MSG_FINAL" | tr -d '[:space:]')" ]; then
+  # Write the generated message first
   printf "%s" "$MSG_FINAL" > "$COMMIT_MSG_FILE"
-  # Optional breadcrumb:
+
+  # Append the trailer to the actual commit-msg file (safer if anything else rewrites earlier)
+  : "${AI_TRAILER:=1}"  # set AI_TRAILER=0 to disable
+  if [ "$AI_TRAILER" = "1" ]; then
+    # Decide model name from backend
+    case "$AI_BACKEND" in
+      openai)    MODEL_USED="${OPENAI_MODEL}";;
+      anthropic) MODEL_USED="${ANTHROPIC_MODEL}";;
+      *)         MODEL_USED="${OLLAMA_MODEL}";;
+    esac
+
+    # Avoid double-appending if already present
+    if ! grep -q '^AI-Commit:' "$COMMIT_MSG_FILE"; then
+      printf "\nAI-Commit: %s %s\n" "$AI_BACKEND" "$MODEL_USED" >> "$COMMIT_MSG_FILE"
+    fi
+
+    # Also print to terminal so you see it during commit
+    echo "[ai-commit] Using backend=$AI_BACKEND model=$MODEL_USED"
+  fi
+
+  # Optional breadcrumb in the log
   echo "[ai-commit] backend=$AI_BACKEND model=$MODEL_USED http=$HTTP_CODE" >> "$LOG"
   exit 0
 fi
