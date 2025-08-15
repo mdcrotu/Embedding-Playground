@@ -14,6 +14,18 @@ DEVSH  := $(shell test -x ./dev.sh && echo yes || echo no)
 
 .DEFAULT_GOAL := help
 
+# Unified pre-commit runner per environment
+ifeq ($(strip $(UV)),)
+  ifeq ($(DEVSH),yes)
+    PRECOMMIT_CMD := ./dev.sh uv run pre-commit
+  else
+    PRECOMMIT_CMD := $(VENV)/bin/pre-commit
+  endif
+else
+  PRECOMMIT_CMD := uvx pre-commit
+endif
+
+
 # ==============================
 # Path A: uv available
 # ==============================
@@ -143,6 +155,12 @@ hooks-uninstall:
 	$(VENV)/bin/pre-commit uninstall || true
 	$(VENV)/bin/pre-commit uninstall -t commit-msg || true
 
+# Show current backend settings
+hook-show:
+	@echo "---- .env.ai ----"
+	@([ -f .env.ai ] && cat .env.ai) || echo "(no .env.ai; defaulting to AI_BACKEND=ollama)"
+
+# Run all hooks on the whole repo (useful locally & in CI)
 pre-commit fmt:
 	$(VENV)/bin/pre-commit run --all-files
 
@@ -165,6 +183,47 @@ endif  # UV
 # ==============================
 # Shared targets
 # ==============================
+.PHONY: hook-ollama hook-openai hook-anthropic hook-show .ensure-precommit
+
+# Ensure pre-commit exists where needed (no-op on uv/dev.sh)
+.ensure-precommit:
+ifeq ($(strip $(UV)),)
+  ifneq ($(DEVSH),yes)
+	@mkdir -p $(VENV)
+	@([ -x "$(VENV)/bin/pre-commit" ] || { \
+	  echo "Installing pre-commit into $(VENV) …"; \
+	  $(PYTHON) -m venv $(VENV); \
+	  $(VENV)/bin/pip install --upgrade pip pre-commit; \
+	})
+  endif
+endif
+	@true
+
+# Set backend to Ollama (local)
+hook-ollama: .ensure-precommit
+	@printf "AI_BACKEND=ollama\nOLLAMA_MODEL=%s\n" "llama3:8b" > .env.ai
+	@echo "Set backend to Ollama (llama3:8b) in .env.ai"
+	@$(PRECOMMIT_CMD) install --hook-type commit-msg --install-hooks
+
+# Set backend to OpenAI (cloud)
+hook-openai: .ensure-precommit
+	@if [ -z "$$OPENAI_API_KEY" ]; then echo "OPENAI_API_KEY not set in env"; exit 1; fi
+	@printf "AI_BACKEND=openai\nOPENAI_MODEL=%s\n" "gpt-4o-mini" > .env.ai
+	@echo "Set backend to OpenAI (gpt-4o-mini) in .env.ai"
+	@$(PRECOMMIT_CMD) install --hook-type commit-msg --install-hooks
+
+# Set backend to Anthropic (cloud)
+hook-anthropic: .ensure-precommit
+	@if [ -z "$$ANTHROPIC_API_KEY" ]; then echo "ANTHROPIC_API_KEY not set in env"; exit 1; fi
+	@printf "AI_BACKEND=anthropic\nANTHROPIC_MODEL=%s\n" "claude-sonnet-4-20250514" > .env.ai
+	@echo "Set backend to Anthropic (claude-sonnet-4-20250514) in .env.ai"
+	@$(PRECOMMIT_CMD) install --hook-type commit-msg --install-hooks
+
+# Show current backend settings
+hook-show:
+	@echo "---- .env.ai ----"
+	@([ -f .env.ai ] && cat .env.ai) || echo "(no .env.ai; defaulting to AI_BACKEND=ollama)"
+
 .PHONY: clean
 clean:
 	rm -rf $(VENV) __pycache__ .pytest_cache .ruff_cache .streamlit/**/__pycache__
@@ -177,9 +236,16 @@ check:
 .PHONY: help
 help:
 	@echo "Targets:"
+	@echo "  ----------------"
 	@echo "  make install       - Install deps (uv/dev.sh/venv fallback)"
 	@echo "  make run           - Run the Streamlit app on port $(PORT)"
+	@echo "  ----------------"
+	@echo "  make hook-ollama   - Use local Ollama for AI commit messages"
+	@echo "  make hook-openai   - Use OpenAI (requires OPENAI_API_KEY)"
+	@echo "  make hook-anthropic- Use Anthropic (requires ANTHROPIC_API_KEY)"
+	@echo "  make hook-show     - Show current AI backend settings"
 	@echo "  make hooks         - Install pre-commit hooks (incl. commit-msg)"
+	@echo "  ----------------"
 	@echo "  make fmt           - Run all pre-commit hooks on all files"
 	@echo "  make format        - One-off Black + Ruff format (optional)"
 	@echo "  make lint          - Ruff check only"

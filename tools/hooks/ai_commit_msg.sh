@@ -28,6 +28,12 @@ if awk 'BEGIN{nonempty=0} /^[[:space:]]*#/ {next} /^[[:space:]]*$/ {next} {nonem
   exit 0
 fi
 
+# Load repo-local overrides if present (optional)
+if [ -f .env.ai ]; then
+  # shellcheck disable=SC1091
+  . ./.env.ai
+fi
+
 # ---- Backend config (env overrides allowed) ----
 : "${AI_BACKEND:=ollama}"                  # ollama | openai | anthropic
 
@@ -374,11 +380,22 @@ else
   MSG_FINAL=$(printf "%s\n" "$summary")
 fi
 
+# Add a trailer so we can see which backend/model produced this message
+: "${AI_TRAILER:=1}"  # set AI_TRAILER=0 to disable
+if [ "$AI_TRAILER" = "1" ]; then
+  case "$AI_BACKEND" in
+    openai)    MODEL_USED="${OPENAI_MODEL}";;
+    anthropic) MODEL_USED="${ANTHROPIC_MODEL}";;
+    *)         MODEL_USED="${OLLAMA_MODEL}";;
+  esac
+  MSG_FINAL="$(printf "%s\n\nAI-Commit: %s %s\n" "$MSG_FINAL" "$AI_BACKEND" "$MODEL_USED")"
+fi
+
 # ---- Accept on message (body-first); log on failure ----
 if [ -n "$(printf "%s" "$MSG_FINAL" | tr -d '[:space:]')" ]; then
   printf "%s" "$MSG_FINAL" > "$COMMIT_MSG_FILE"
   # Optional breadcrumb:
-  # echo "[ai-commit] accepted message; HTTP=$HTTP_CODE" >> "$LOG"
+  echo "[ai-commit] backend=$AI_BACKEND model=$MODEL_USED http=$HTTP_CODE" >> "$LOG"
   exit 0
 fi
 
