@@ -6,6 +6,7 @@
 # - Captures HTTP code separately; accepts body-first on success.
 # - Sanitizes/normalizes to Conventional Commits.
 # - Light heuristics to remap type (build/ci/docs/test/style/perf) and infer scope.
+# - Appends an "AI-Commit: <backend> <model>" trailer to the final message.
 
 set -euo pipefail
 
@@ -59,6 +60,7 @@ fi
 # ---- Collect staged diff to file (no color, minimal context) ----
 git diff --cached --unified=0 --no-color | head -n "$MAX_DIFF_LINES" > "$DIFF_FILE" || true
 if [ ! -s "$DIFF_FILE" ]; then
+  # Nothing staged; nothing to do (leave buffer empty so Git shows editor as usual)
   exit 0
 fi
 
@@ -463,7 +465,10 @@ fi
 
 # ---- Accept on message (body-first); log on failure ----
 if [ -n "$(printf "%s" "$MSG_FINAL" | tr -d '[:space:]')" ]; then
-  # Write the generated message first
+  # Print a one-line breadcrumb to your terminal
+  echo "[ai-commit] Using backend=${AI_BACKEND:-ollama} model=$MODEL_USED"
+
+  # Write generated message
   printf "%s" "$MSG_FINAL" > "$COMMIT_MSG_FILE"
 
   # Append the trailer to the actual commit-msg file (safer if anything else rewrites earlier)
