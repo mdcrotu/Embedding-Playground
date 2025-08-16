@@ -71,6 +71,55 @@ if (( ! have_jq && ! have_py )); then
   exit 0
 fi
 
+# ---------------- NEW: File-based type hint ----------------
+# We detect an intended Conventional Commit type from the set of staged files.
+detect_type_from_files() {
+  # Gather staged files once
+  local files
+  files="$(git diff --cached --name-only | tr -d '\r')"
+
+  # Flags
+  local has_docs=0 has_tests=0 has_ci=0 has_docker=0 has_make=0 has_build=0 has_tf=0 has_style_cfg=0 has_perf=0 has_code=0
+  # Docs
+  grep -Eq '\.(md|txt)$|^docs/' <<<"$files" && has_docs=1
+  # Tests
+  grep -Eq '(^|/)(tests?|__tests__)(/|$)|_test\.py$|\.spec\.' <<<"$files" && has_tests=1
+  # CI
+  grep -Eq '^\.github/workflows/|^\.gitlab-ci\.ya?ml$' <<<"$files" && has_ci=1
+  # Docker / infra
+  grep -Eq '(^|/)(Dockerfile|docker-compose(\.ya?ml)?)$' <<<"$files" && has_docker=1
+  grep -q  '^Makefile$' <<<"$files" && has_make=1
+  grep -Eq '\.tf$'      <<<"$files" && has_tf=1
+  grep -E  -q '(^|/)(Makefile|pyproject\.toml|requirements\.(txt|in)|package(-lock)?\.json|uv\.lock)$' <<<"$files" && has_build=1
+  # Style / lint config tweaks
+  grep -E  -q '(^|/)(\.ruff\.toml|ruff\.toml|pyproject\.toml|\.pre-commit-config\.ya?ml)$' <<<"$files" && has_style_cfg=1
+  # Perf / bench dirs
+  grep -Eq '(^|/)(benchmarks?|perf)/' <<<"$files" && has_perf=1
+  # Code-ish extensions (rough heuristic)
+  grep -Eq '\.(py|js|ts|tsx|jsx|go|rs|java|kt|c|cc|cpp|m|mm|rb|php|scala)$' <<<"$files" && has_code=1
+
+  # Priority: docs > test > ci > build (docker/make/tf/buildfiles) > style > perf > feat/chore
+  if (( has_docs )); then
+    echo docs; return
+  elif (( has_tests )); then
+    echo test; return
+  elif (( has_ci )); then
+    echo ci; return
+  elif (( has_docker || has_make || has_tf || has_build )); then
+    echo build; return
+  elif (( has_style_cfg )); then
+    echo style; return
+  elif (( has_perf )); then
+    echo perf; return
+  elif (( has_code )); then
+    # Let the AI choose between feat/fix; we just won’t force chore
+    echo feat; return
+  fi
+  echo chore
+}
+
+HINT_TYPE="$(detect_type_from_files)"
+
 # ---------------- Prompts ----------------
 read -r SYS_PROMPT <<'SYS'
 You write Conventional Commit messages from staged diffs.
@@ -86,6 +135,13 @@ STRICT RULES — DO NOT VIOLATE:
 - NO other text besides the commit message.
 SYS
 
+# ---------------- NEW: Enrich system prompt with a type hint ----------------
+SYS_PROMPT_ENRICHED="${SYS_PROMPT}
+
+PREFERRED_COMMIT_TYPE: ${HINT_TYPE}
+- When consistent with the diff, prefer the commit type above.
+- Do not force it if it would be misleading; use your best judgment between feat/fix/refactor when code changes are present."
+
 read -r USER_LEADIN <<'TXT'
 Create a Conventional Commit message for the following staged diff.
 
@@ -98,7 +154,7 @@ build_payload_ollama() {
   if (( have_jq )); then
     jq -n \
       --arg model   "$OLLAMA_MODEL" \
-      --arg system  "$SYS_PROMPT" \
+      --arg system  "$SYS_PROMPT_ENRICHED" \
       --arg leadin  "$USER_LEADIN" \
       --rawfile diff "$DIFF_FILE" \
       --arg trailin "$USER_TRAILIN" \
@@ -114,7 +170,7 @@ build_payload_ollama() {
          stream: false
        }'
   else
-    python3 - "$OLLAMA_MODEL" "$SYS_PROMPT" "$USER_LEADIN" "$USER_TRAILIN" "$DIFF_FILE" "$CTX_TOKENS" "$TEMP" <<'PY'
+    python3 - "$OLLAMA_MODEL" "$SYS_PROMPT_ENRICHED" "$USER_LEADIN" "$USER_TRAILIN" "$DIFF_FILE" "$CTX_TOKENS" "$TEMP" <<'PY'
 import sys, json, io
 model, system, leadin, trailin, diff_file, num_ctx, temp = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], int(sys.argv[6]), float(sys.argv[7])
 with io.open(diff_file, 'r', encoding='utf-8', errors='replace') as f:
@@ -138,7 +194,7 @@ build_payload_openai() {
   if (( have_jq )); then
     jq -n \
       --arg model   "$OPENAI_MODEL" \
-      --arg system  "$SYS_PROMPT" \
+      --arg system  "$SYS_PROMPT_ENRICHED" \
       --arg leadin  "$USER_LEADIN" \
       --rawfile diff "$DIFF_FILE" \
       --arg trailin "$USER_TRAILIN" \
@@ -150,7 +206,7 @@ build_payload_openai() {
         ]
       }'
   else
-    python3 - "$OPENAI_MODEL" "$SYS_PROMPT" "$USER_LEADIN" "$USER_TRAILIN" "$DIFF_FILE" <<'PY'
+    python3 - "$OPENAI_MODEL" "$SYS_PROMPT_ENRICHED" "$USER_LEADIN" "$USER_TRAILIN" "$DIFF_FILE" <<'PY'
 import sys, json, io
 model, system, leadin, trailin, diff_file = sys.argv[1:]
 with io.open(diff_file, 'r', encoding='utf-8', errors='replace') as f:
@@ -172,7 +228,7 @@ build_payload_anthropic() {
   if (( have_jq )); then
     jq -n \
       --arg model   "$ANTHROPIC_MODEL" \
-      --arg system  "$SYS_PROMPT" \
+      --arg system  "$SYS_PROMPT_ENRICHED" \
       --arg leadin  "$USER_LEADIN" \
       --rawfile diff "$DIFF_FILE" \
       --arg trailin "$USER_TRAILIN" \
@@ -186,7 +242,7 @@ build_payload_anthropic() {
         ]
       }'
   else
-    python3 - "$ANTHROPIC_MODEL" "$SYS_PROMPT" "$USER_LEADIN" "$USER_TRAILIN" "$DIFF_FILE" "$MAX_MODEL_TOKENS" <<'PY'
+    python3 - "$ANTHROPIC_MODEL" "$SYS_PROMPT_ENRICHED" "$USER_LEADIN" "$USER_TRAILIN" "$DIFF_FILE" "$MAX_MODEL_TOKENS" <<'PY'
 import sys, json, io
 model, system, leadin, trailin, diff_file, max_tokens = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], int(sys.argv[6])
 with io.open(diff_file, 'r', encoding='utf-8', errors='replace') as f:
@@ -348,7 +404,7 @@ if ! printf "%s" "$summary" | grep -Eq '^(feat|fix|refactor|docs|test|chore|perf
   summary="chore: $summary"
 fi
 
-# Heuristic remap priority (topmost wins)
+# Heuristic remap priority (topmost wins) — existing logic
 if [ "$only_md" = 1 ]; then
   summary=$(printf "%s" "$summary" | sed -E 's/^[a-z]+(\(|:)/docs\1/')
 elif [ "$only_tests" = 1 ]; then
@@ -363,6 +419,18 @@ elif [ "$has_ruff_black_cfg" = 1 ]; then
 elif [ "$has_benchmarks" = 1 ]; then
   summary=$(printf "%s" "$summary" | sed -E 's/^[a-z]+(\(|:)/perf\1/')
 fi
+
+# ---------------- NEW: Final type coercion from HINT_TYPE ----------------
+# If AI + remap didn't land on the hinted type (and the hint is meaningful), force it.
+current_type="$(printf "%s" "$summary" | sed -E 's/^([a-z]+).*/\1/')"
+case "$HINT_TYPE" in
+  docs|test|ci|build|style|perf)
+    if [ "$current_type" != "$HINT_TYPE" ]; then
+      summary="$(printf "%s" "$summary" | sed -E "s/^[a-z]+(\(|:)/${HINT_TYPE}\1/")"
+    fi
+    ;;
+  feat|fix|refactor|chore) : ;;  # don't force these; let AI decide among them
+esac
 
 # Add a scope if missing and a meaningful top dir exists
 if ! printf "%s" "$summary" | grep -Eq '^[a-z]+\([^)]+\): '; then
@@ -392,14 +460,6 @@ if [ "$AI_TRAILER" = "1" ]; then
   echo "[ai-commit] Using backend=$AI_BACKEND model=$MODEL_USED"
   MSG_FINAL="$(printf "%s\n\nAI-Commit: %s %s\n" "$MSG_FINAL" "$AI_BACKEND" "$MODEL_USED")"
 fi
-
-# # ---- Accept on message (body-first); log on failure ----
-# if [ -n "$(printf "%s" "$MSG_FINAL" | tr -d '[:space:]')" ]; then
-#   printf "%s" "$MSG_FINAL" > "$COMMIT_MSG_FILE"
-#   # Optional breadcrumb:
-#   echo "[ai-commit] backend=$AI_BACKEND model=$MODEL_USED http=$HTTP_CODE" >> "$LOG"
-#   exit 0
-# fi
 
 # ---- Accept on message (body-first); log on failure ----
 if [ -n "$(printf "%s" "$MSG_FINAL" | tr -d '[:space:]')" ]; then
