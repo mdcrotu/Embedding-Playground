@@ -49,35 +49,50 @@ keybert>=0.8
 scikit-learn>=1.4
 numpy>=1.26
 matplotlib>=3.9
+```
+---
 
-🚀 Quick Start
-1. Clone the repo
+## 🚀 Quick Start
+
+### 1. Clone the repo
+```bash
 git clone https://github.com/mdcrotu/Embedding-Playground.git
 cd embedding-playground
+```
 
 2. Install dependencies
 Option A — uv (recommended)
+```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 make install
+```
 
 Option B — dev.sh auto-installer
+```bash
 chmod +x dev.sh
 ./dev.sh run
+```
 
 Option C — pip + venv
+```bash
 python3 -m venv .venv
 source .venv/bin/activate  # or .venv\Scripts\activate on Windows
 pip install -r requirements.txt
-
-▶️ Running the App
+```
+---
+## ▶️ Running the App
+```bash
 make run
-
+```
 Or with dev.sh:
+```bash
 ./dev.sh run
-
+```
 Streamlit will start and open a browser window (default: http://localhost:8501).
 
-🤖 AI Commit Message Setup
+
+---
+## 🤖 AI Commit Message Setup
 
 The project includes a prepare-commit-msg hook that uses AI to generate commit messages.
 You can choose your backend:
@@ -95,19 +110,23 @@ If you run git commit -m "...", the hook is skipped — no AI generation.
 If you run git commit without -m, the AI-generated message appears in your editor so you can review/edit it.
 The generated commit message always includes an AI-Commit: line at the bottom with the backend and model.
 
+---
+## 🧹 Formatting & Linting
+- Black — Python code formatter.
+- Ruff — Fast linter & auto-fixer.
+- pre-commit — Runs these before each commit.
 
-🧹 Formatting & Linting
-Black — Python code formatter.
-Ruff — Fast linter & auto-fixer.
-pre-commit — Runs these before each commit.
-
-Install all hooks (without setting an AI backend):
-make hooks
-
+Install hooks once:
+```bash
+make hook-install
+```
 Run checks manually:
+```bash
 make fmt
-
-📂 Project Structure
+```
+---
+## 📂 Project Structure
+```bash
 .
 ├── app.py                   # Streamlit app with visuals
 ├── dev.sh                   # First-time setup helper (installs uv if needed)
@@ -118,8 +137,9 @@ make fmt
 ├── .pre-commit-config.yaml   # Pre-commit hook config
 ├── .env.ai                   # AI backend settings (created by make hook-*)
 └── README.md
-
-⚙️ Commands Cheat Sheet
+```
+---
+## ⚙️ Commands Cheat Sheet
 | Command                  | Description                           |
 | ------------------------ | ------------------------------------- |
 | **Core**                 |                                       |
@@ -139,20 +159,133 @@ make fmt
 | `make clean`             | Remove venv and caches                |
 | `make check`             | Alias for `make fmt`                  |
 
-📷 Screenshots (Example)
-Polar Vector Plot
-PCA History Map
-Top-Dimension Contribution Bars
+---
+## 🛠 Troubleshooting
+#### 1. If .env.ai is missing
 
-📜 License
+The AI commit hook relies on .env.ai to know which backend/model to use.
+If it’s missing, the hook will usually fail silently (or just leave your commit message unchanged).
+
+Fix: Re-run one of the backend setup commands:
+```bash
+make hook-ollama
+# or
+make hook-openai
+# or
+make hook-anthropic
+```
+This will regenerate .env.ai with the correct backend settings.
+
+#### 2. Skipping the AI hook
+Sometimes you don’t want to wait for the AI or you want to write your own message.
+- Bypass the hook completely:
+```bash
+git commit -m "your message here" --no-verify
+```
+(--no-verify skips all pre-commit hooks, not just AI.)
+
+- Write your own message normally:
+```bash
+git commit -m "your message here"
+```
+If you pass -m, the hook is skipped — your message is used as-is.
+
+#### 3. Why git commit -m skips AI generation
+
+When you use:
+```bash
+git commit -m "message"
+```
+Git never opens the commit message buffer (.git/COMMIT_EDITMSG). Since our hook is a prepare-commit-msg hook that modifies that buffer, it doesn’t get a chance to run.
+
+That’s expected behavior.
+If you want the AI to generate a commit message you can review/edit, just run:
+```bash
+git commit
+```
+(with no -m). Git opens your editor, the hook injects the AI-generated message, and you can edit it before saving.
+
+#### 4. Debugging the hook
+
+If the hook doesn’t seem to run:
+- Make sure .git/hooks/prepare-commit-msg exists and is executable.
+- Add set -x at the top of ai_commit_msg.sh to print debug output.
+- Check the log files (if enabled) in .git/hooks/ like _ai_commit.log.
+
+---
+## ❓ FAQ
+**Why does git commit open my editor first?**
+
+That’s just how Git works — it always opens the commit message buffer (.git/COMMIT_EDITMSG) unless you pass -m.
+
+Our hook edits that buffer before the editor opens, so you see the AI-generated message pre-filled, ready for you to edit.
+
+---
+**Why does git commit -m "msg" skip the AI?**
+
+Because with -m, Git never opens .git/COMMIT_EDITMSG. The AI hook only runs when there’s a buffer to modify.
+If you want AI, just run git commit without -m.
+
+---
+**Where is the AI commit message stored?**
+- Temporary files: .git/hooks/_ai_* (diff, payload, logs).
+
+- Final commit message: .git/COMMIT_EDITMSG.
+That’s what Git reads when you save and exit your editor.
+
+---
+**How do I change the default AI model?**
+
+Edit .env.ai in your repo root:
+```bash
+AI_BACKEND=openai
+OPENAI_MODEL=gpt-4o-mini
+```
+(or set it to ollama / anthropic).
+Then re-run:
+```bash
+make hook-openai
+```
+(or hook-ollama, etc.)
+
+---
+**How do I temporarily bypass the AI?**
+
+Use:
+```bash
+git commit -m "your message" --no-verify
+```
+That skips all hooks. Or just pass -m to skip AI but still run lint/format hooks.
+
+---
+**How do I know which AI backend was used?**
+
+Every generated message ends with a trailer like:
+```makefile
+AI-Commit: openai gpt-4o-mini
+```
+So you can see it in git log later.
+
+---
+**Can I re-run the AI on an old commit?**
+
+Yep — just edit the commit:
+```bash
+git commit --amend
+```
+The hook will generate a new message, and you can replace the old one.
+
+---
+## 📷 Screenshots (Example)
+**Polar Vector Plot**
+
+**PCA History Map**
+
+**Top-Dimension Contribution Bars**
+
+---
+## 📜 License
 
 MIT License — do whatever you like, attribution appreciated.
 
 ---
-
-If you want, I can also add a **“Troubleshooting”** section that covers:
-- What happens if `.env.ai` is missing.
-- How to bypass the hook temporarily.
-- Why `git commit -m` skips AI generation.
-
-Do you want me to add that too? That way future-you won’t have to re-learn it later.
